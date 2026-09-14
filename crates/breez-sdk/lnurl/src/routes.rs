@@ -1962,6 +1962,42 @@ async fn sanitize_domain<DB>(
 
 pub struct Host(pub String);
 
+/// The header a trusted reverse proxy names the served domain in when the
+/// request cannot physically arrive at that domain.
+///
+/// WAVLAKE PATCH (carried on top of upstream 0.25.0, `wavlake/spark-sdk`):
+/// upstream reads only `Host` since PR 1066. That is correct when the server is
+/// reachable at the address domain itself. Wavlake's address domain
+/// (`wavlake.com`) is served by Vercel, which forwards `/lnurlpay/*` to this
+/// service on Cloud Run: the request arrives with `Host` = the `*.run.app`
+/// origin (a proxy cannot send a bare `Host` for a domain the Google frontend
+/// does not route), and the address domain rides `X-Forwarded-Host` instead.
+///
+/// Honouring the header first is safe under the v2 signed messages: every
+/// control-plane signature commits to the domain the wallet addressed, so a
+/// forged `X-Forwarded-Host` only makes the signature fail to verify — it
+/// cannot steer a registration to another served domain. The unsigned reads
+/// (`/lnurlp/{name}`, `/lnurlpay/available/{name}`) are public data keyed on
+/// an allow-listed domain either way. The `Host`-only fallback below is
+/// upstream's code, untouched.
+const FORWARDED_HOST_HEADER: &str = "x-forwarded-host";
+
+/// The first non-empty entry of a comma-separated forwarded-host value, or
+/// `None` when the header is absent or carries nothing usable.
+fn forwarded_host(parts: &Parts) -> Option<String> {
+    parts
+        .headers
+        .get(FORWARDED_HOST_HEADER)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .find(|entry| !entry.is_empty())
+        })
+        .map(str::to_string)
+}
+
 impl<S> FromRequestParts<S> for Host
 where
     S: Send + Sync,
@@ -1969,6 +2005,10 @@ where
     type Rejection = (StatusCode, Json<Value>);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        if let Some(host) = forwarded_host(parts) {
+            return Ok(Host(host));
+        }
+
         if let Some(host) = parts.headers.get("host").and_then(|h| h.to_str().ok()) {
             return Ok(Host(host.to_string()));
         }
@@ -3940,5 +3980,63 @@ mod tests {
                 "{lnurl} should not address alice@example.com"
             );
         }
+    }
+}
+
+// WAVLAKE PATCH tests — the `Host` extractor honours a proxy's
+// `X-Forwarded-Host` ahead of `Host` (see `FORWARDED_HOST_HEADER`).
+#[cfg(test)]
+mod forwarded_host_tests {
+    use super::Host;
+    use axum::extract::FromRequestParts;
+    use axum::http::Request;
+
+    async fn resolve(
+        build: impl FnOnce(axum::http::request::Builder) -> axum::http::request::Builder,
+    ) -> String {
+        let request = build(Request::builder().uri("https://origin.run.app/lnurlp/alice"))
+            .body(())
+            .expect("request");
+        let (mut parts, _) = request.into_parts();
+        let Host(host) = Host::from_request_parts(&mut parts, &())
+            .await
+            .expect("host resolves");
+        host
+    }
+
+    #[tokio::test]
+    async fn forwarded_host_wins_over_host() {
+        let host = resolve(|b| {
+            b.header("host", "spark-lnurl-854568123236.us-central1.run.app")
+                .header("x-forwarded-host", "wavlake.com")
+        })
+        .await;
+        assert_eq!(host, "wavlake.com");
+    }
+
+    #[tokio::test]
+    async fn first_entry_of_a_forwarded_chain_is_used() {
+        let host = resolve(|b| {
+            b.header("host", "origin.run.app")
+                .header("x-forwarded-host", " wavlake.com , edge.internal")
+        })
+        .await;
+        assert_eq!(host, "wavlake.com");
+    }
+
+    #[tokio::test]
+    async fn empty_forwarded_host_falls_back_to_host() {
+        let host = resolve(|b| {
+            b.header("host", "origin.run.app")
+                .header("x-forwarded-host", " , ")
+        })
+        .await;
+        assert_eq!(host, "origin.run.app");
+    }
+
+    #[tokio::test]
+    async fn absent_forwarded_host_is_upstream_behaviour() {
+        let host = resolve(|b| b.header("host", "origin.run.app")).await;
+        assert_eq!(host, "origin.run.app");
     }
 }

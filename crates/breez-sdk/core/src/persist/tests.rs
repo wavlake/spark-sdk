@@ -819,7 +819,6 @@ pub async fn test_storage(storage: Box<dyn Storage>) {
             nostr_zap_receipt: lnurl_receive_metadata.nostr_zap_receipt.clone(),
             nostr_zap_request: lnurl_receive_metadata.nostr_zap_request.clone(),
             payment_hash: lnurl_receive_payment_hash.clone(),
-            invoice: Some("lnbc1000n1pjqxyz9pp5receive123def456ghi789jkl012mno345pqr678stu901vwx234yz567890abcdefghijklmnopqrstuvwxyz".to_string()),
             sender_comment: lnurl_receive_metadata.sender_comment.clone(),
         }])
         .await
@@ -1121,7 +1120,6 @@ pub async fn test_storage(storage: Box<dyn Storage>) {
         .set_lnurl_metadata(vec![SetLnurlMetadataItem {
             payment_hash: "zaphash1234567890abcdef1234567890abcdef1234567890abcdef12345678"
                 .to_string(),
-            invoice: Some("lnbc1000n1pjqxyz9pp5zap123def456ghi789jkl012mno345pqr678stu901vwx234yz567890abcdefghijklmnopqrstuvwxyz".to_string()),
             sender_comment: Some("Great content!".to_string()),
             nostr_zap_request: Some(
                 r#"{"kind":9734,"content":"zap request","tags":[]}"#.to_string(),
@@ -1220,14 +1218,12 @@ pub async fn test_storage(storage: Box<dyn Storage>) {
         .set_lnurl_metadata(vec![
             SetLnurlMetadataItem {
                 payment_hash: "zaphash2".to_string(),
-                invoice: Some("lnbc500n1pjqxyz9pp5zap2".to_string()),
                 sender_comment: Some("Nice work!".to_string()),
                 nostr_zap_request: None,
                 nostr_zap_receipt: None,
             },
             SetLnurlMetadataItem {
                 payment_hash: "zaphash3".to_string(),
-                invoice: Some("lnbc250n1pjqxyz9pp5zap3".to_string()),
                 sender_comment: None,
                 nostr_zap_request: Some(r#"{"kind":9734,"content":"zap3"}"#.to_string()),
                 nostr_zap_receipt: None,

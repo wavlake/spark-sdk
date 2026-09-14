@@ -488,10 +488,7 @@ impl PostgresStorage {
             vec!["ALTER TABLE brz_unclaimed_deposits ADD COLUMN refund_state JSONB".to_string()],
             // Migration 23: A Lightning payment settled by a transfer to the Spark
             // destination its invoice advertised involves no HTLC, so the columns
-            // describing one become nullable. Lnurl receive metadata is matched on
-            // the invoice for the same reason: such a payment has no payment hash
-            // of its own to match on. Clearing the sync cursor refills the new
-            // column for rows already synced.
+            // describing one become nullable.
             vec![
                 "ALTER TABLE brz_payment_details_lightning ALTER COLUMN payment_hash DROP NOT NULL"
                     .to_string(),
@@ -499,11 +496,6 @@ impl PostgresStorage {
                     .to_string(),
                 "ALTER TABLE brz_payment_details_lightning ALTER COLUMN htlc_expiry_time DROP NOT NULL"
                     .to_string(),
-                "ALTER TABLE brz_lnurl_receive_metadata ADD COLUMN IF NOT EXISTS invoice TEXT"
-                    .to_string(),
-                "CREATE INDEX IF NOT EXISTS brz_idx_lnurl_receive_metadata_invoice ON brz_lnurl_receive_metadata(invoice)"
-                    .to_string(),
-                "DELETE FROM brz_settings WHERE key = 'lnurl_metadata_updated_after'".to_string(),
             ],
         ]
     }
@@ -1397,14 +1389,13 @@ impl Storage for PostgresStorage {
         for m in metadata {
             client
                 .execute(
-                    "INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, invoice, nostr_zap_request, nostr_zap_receipt, sender_comment)
-                     VALUES ($1, $2, $3, $4, $5, $6)
+                    "INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, nostr_zap_request, nostr_zap_receipt, sender_comment)
+                     VALUES ($1, $2, $3, $4, $5)
                      ON CONFLICT(user_id, payment_hash) DO UPDATE SET
-                        invoice = COALESCE(EXCLUDED.invoice, brz_lnurl_receive_metadata.invoice),
                         nostr_zap_request = EXCLUDED.nostr_zap_request,
                         nostr_zap_receipt = EXCLUDED.nostr_zap_receipt,
                         sender_comment = EXCLUDED.sender_comment",
-                    &[&self.identity, &m.payment_hash, &m.invoice, &m.nostr_zap_request, &m.nostr_zap_receipt, &m.sender_comment],
+                    &[&self.identity, &m.payment_hash, &m.nostr_zap_request, &m.nostr_zap_receipt, &m.sender_comment],
                 )
                 .await?;
         }
@@ -1990,7 +1981,7 @@ const SELECT_PAYMENT_SQL: &str = "
       LEFT JOIN brz_payment_details_spark s ON p.id = s.payment_id AND p.user_id = s.user_id
       LEFT JOIN brz_payment_details_deposit pd ON p.id = pd.payment_id AND p.user_id = pd.user_id
       LEFT JOIN brz_payment_metadata pm ON p.id = pm.payment_id AND p.user_id = pm.user_id
-      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.invoice = lrm.invoice AND l.user_id = lrm.user_id";
+      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.payment_hash = lrm.payment_hash AND l.user_id = lrm.user_id";
 
 #[allow(clippy::too_many_lines)]
 fn map_payment(row: &Row) -> Result<Payment, StorageError> {
@@ -2638,7 +2629,6 @@ mod tests {
         // --- lnurl receive metadata ---
         fx.a.set_lnurl_metadata(vec![SetLnurlMetadataItem {
             payment_hash: "shared_payment_hash".to_string(),
-            invoice: Some("lnbc_a".to_string()),
             nostr_zap_request: Some("zap_a".to_string()),
             nostr_zap_receipt: None,
             sender_comment: None,
@@ -2647,7 +2637,6 @@ mod tests {
         .unwrap();
         fx.b.set_lnurl_metadata(vec![SetLnurlMetadataItem {
             payment_hash: "shared_payment_hash".to_string(),
-            invoice: Some("lnbc_b".to_string()),
             nostr_zap_request: Some("zap_b".to_string()),
             nostr_zap_receipt: None,
             sender_comment: None,

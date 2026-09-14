@@ -105,7 +105,7 @@ const SELECT_PAYMENT_SQL = `
       LEFT JOIN brz_payment_details_spark s ON p.id = s.payment_id AND p.user_id = s.user_id
       LEFT JOIN brz_payment_details_deposit pd ON p.id = pd.payment_id AND p.user_id = pd.user_id
       LEFT JOIN brz_payment_metadata pm ON p.id = pm.payment_id AND p.user_id = pm.user_id
-      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.invoice = lrm.invoice AND l.user_id = lrm.user_id`;
+      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.payment_hash = lrm.payment_hash AND l.user_id = lrm.user_id`;
 
 /**
  * mysql2 may return JSON columns as either parsed objects or raw strings
@@ -906,17 +906,15 @@ class MysqlStorage {
       await this._withTransaction(async (conn) => {
         for (const item of metadata) {
           await conn.query(
-            `INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, invoice, nostr_zap_request, nostr_zap_receipt, sender_comment)
-             VALUES (?, ?, ?, ?, ?, ?)
+            `INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, nostr_zap_request, nostr_zap_receipt, sender_comment)
+             VALUES (?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
-               invoice = COALESCE(VALUES(invoice), invoice),
                nostr_zap_request = VALUES(nostr_zap_request),
                nostr_zap_receipt = VALUES(nostr_zap_receipt),
                sender_comment = VALUES(sender_comment)`,
             [
               this.identity,
               item.paymentHash,
-              item.invoice || null,
               item.nostrZapRequest || null,
               item.nostrZapReceipt || null,
               item.senderComment || null,

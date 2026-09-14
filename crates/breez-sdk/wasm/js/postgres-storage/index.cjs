@@ -90,7 +90,7 @@ const SELECT_PAYMENT_SQL = `
       LEFT JOIN brz_payment_details_spark s ON p.id = s.payment_id AND p.user_id = s.user_id
       LEFT JOIN brz_payment_details_deposit pd ON p.id = pd.payment_id AND p.user_id = pd.user_id
       LEFT JOIN brz_payment_metadata pm ON p.id = pm.payment_id AND p.user_id = pm.user_id
-      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.invoice = lrm.invoice AND l.user_id = lrm.user_id`;
+      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.payment_hash = lrm.payment_hash AND l.user_id = lrm.user_id`;
 
 class PostgresStorage {
   /**
@@ -834,17 +834,15 @@ class PostgresStorage {
       await this._withTransaction(async (client) => {
         for (const item of metadata) {
           await client.query(
-            `INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, invoice, nostr_zap_request, nostr_zap_receipt, sender_comment)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, nostr_zap_request, nostr_zap_receipt, sender_comment)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT(user_id, payment_hash) DO UPDATE SET
-               invoice = COALESCE(EXCLUDED.invoice, brz_lnurl_receive_metadata.invoice),
                nostr_zap_request = EXCLUDED.nostr_zap_request,
                nostr_zap_receipt = EXCLUDED.nostr_zap_receipt,
                sender_comment = EXCLUDED.sender_comment`,
             [
               this.identity,
               item.paymentHash,
-              item.invoice || null,
               item.nostrZapRequest || null,
               item.nostrZapReceipt || null,
               item.senderComment || null,

@@ -525,17 +525,7 @@ class MigrationManager {
           `DROP TABLE payment_details_lightning`,
           `ALTER TABLE payment_details_lightning_new RENAME TO payment_details_lightning`,
           `CREATE INDEX idx_payment_details_lightning_invoice ON payment_details_lightning(invoice)`,
-        ],
-      },
-      {
-        // Lnurl receive metadata is matched to a payment on the invoice: a
-        // payment with no HTLC has no payment hash of its own to match on.
-        // Clearing the cursor re-syncs every row so the column is filled.
-        name: "Match lnurl receive metadata on the invoice",
-        sql: [
-          `ALTER TABLE lnurl_receive_metadata ADD COLUMN invoice TEXT`,
-          `CREATE INDEX idx_lnurl_receive_metadata_invoice ON lnurl_receive_metadata(invoice)`,
-          `DELETE FROM settings WHERE key = 'lnurl_metadata_updated_after'`,
+          `CREATE INDEX idx_payment_details_lightning_payment_hash ON payment_details_lightning(payment_hash)`,
         ],
       },
     ];

@@ -91,7 +91,7 @@ const SELECT_PAYMENT_SQL = `
       LEFT JOIN payment_details_spark s ON p.id = s.payment_id
       LEFT JOIN payment_details_deposit pd ON p.id = pd.payment_id
       LEFT JOIN payment_metadata pm ON p.id = pm.payment_id
-      LEFT JOIN lnurl_receive_metadata lrm ON l.invoice = lrm.invoice`;
+      LEFT JOIN lnurl_receive_metadata lrm ON l.payment_hash = lrm.payment_hash`;
 
 class SqliteStorage {
   constructor(dbPath, logger = null) {
@@ -808,23 +808,13 @@ class SqliteStorage {
   setLnurlMetadata(metadata) {
     try {
       const stmt = this.db.prepare(
-        // The invoice is kept when a later row arrives without one, so a row that
-        // reaches us before its invoice exists server-side is not stripped of the
-        // invoice a previous sync did carry.
-        `INSERT INTO lnurl_receive_metadata (payment_hash, invoice, nostr_zap_request, nostr_zap_receipt, sender_comment)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(payment_hash) DO UPDATE SET
-           invoice=COALESCE(excluded.invoice, lnurl_receive_metadata.invoice),
-           nostr_zap_request=excluded.nostr_zap_request,
-           nostr_zap_receipt=excluded.nostr_zap_receipt,
-           sender_comment=excluded.sender_comment`
+"INSERT OR REPLACE INTO lnurl_receive_metadata (payment_hash, nostr_zap_request, nostr_zap_receipt, sender_comment) VALUES (?, ?, ?, ?)"
       );
 
       const transaction = this.db.transaction(() => {
         for (const item of metadata) {
           stmt.run(
             item.paymentHash,
-            item.invoice || null,
             item.nostrZapRequest || null,
             item.nostrZapReceipt || null,
             item.senderComment || null

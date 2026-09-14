@@ -412,13 +412,8 @@ impl SqliteStorage {
              FROM payment_details_lightning;
              DROP TABLE payment_details_lightning;
              ALTER TABLE payment_details_lightning_new RENAME TO payment_details_lightning;
-             CREATE INDEX idx_payment_details_lightning_invoice ON payment_details_lightning(invoice);",
-            // Lnurl receive metadata is matched to a payment on the invoice: a
-            // payment with no HTLC has no payment hash of its own to match on.
-            // Clearing the cursor re-syncs every row so the column is filled.
-            "ALTER TABLE lnurl_receive_metadata ADD COLUMN invoice TEXT;
-             CREATE INDEX idx_lnurl_receive_metadata_invoice ON lnurl_receive_metadata(invoice);
-             DELETE FROM settings WHERE key = 'lnurl_metadata_updated_after';",
+             CREATE INDEX idx_payment_details_lightning_invoice ON payment_details_lightning(invoice);
+             CREATE INDEX idx_payment_details_lightning_payment_hash ON payment_details_lightning(payment_hash);",
         ]
     }
 }
@@ -1092,19 +1087,10 @@ impl Storage for SqliteStorage {
         let connection = self.get_connection()?;
         for metadata in metadata {
             connection.execute(
-                // The invoice is kept when a later row arrives without one, so a
-                // row that reaches us before its invoice exists server-side is
-                // not stripped of the invoice a previous sync did carry.
-                "INSERT INTO lnurl_receive_metadata (payment_hash, invoice, nostr_zap_request, nostr_zap_receipt, sender_comment)
-                 VALUES (?, ?, ?, ?, ?)
-                 ON CONFLICT(payment_hash) DO UPDATE SET
-                    invoice=COALESCE(excluded.invoice, lnurl_receive_metadata.invoice),
-                    nostr_zap_request=excluded.nostr_zap_request,
-                    nostr_zap_receipt=excluded.nostr_zap_receipt,
-                    sender_comment=excluded.sender_comment",
+                "INSERT OR REPLACE INTO lnurl_receive_metadata (payment_hash, nostr_zap_request, nostr_zap_receipt, sender_comment)
+                 VALUES (?, ?, ?, ?)",
                 params![
                     metadata.payment_hash,
-                    metadata.invoice,
                     metadata.nostr_zap_request,
                     metadata.nostr_zap_receipt,
                     metadata.sender_comment,
@@ -1648,7 +1634,7 @@ const SELECT_PAYMENT_SQL: &str = "
       LEFT JOIN payment_details_spark s ON p.id = s.payment_id
       LEFT JOIN payment_details_deposit pd ON p.id = pd.payment_id
       LEFT JOIN payment_metadata pm ON p.id = pm.payment_id
-      LEFT JOIN lnurl_receive_metadata lrm ON l.invoice = lrm.invoice";
+      LEFT JOIN lnurl_receive_metadata lrm ON l.payment_hash = lrm.payment_hash";
 
 #[allow(clippy::too_many_lines)]
 fn map_payment(row: &Row<'_>) -> Result<Payment, rusqlite::Error> {

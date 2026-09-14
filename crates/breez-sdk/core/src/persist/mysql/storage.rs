@@ -556,29 +556,13 @@ impl MysqlStorage {
             }],
             // Migration 24: A Lightning payment settled by a transfer to the Spark
             // destination its invoice advertised involves no HTLC, so the columns
-            // describing one become nullable. Lnurl receive metadata is matched on
-            // the invoice for the same reason: such a payment has no payment hash
-            // of its own to match on. Clearing the sync cursor refills the new
-            // column for rows already synced.
-            vec![
-                Migration::sql(
-                    "ALTER TABLE brz_payment_details_lightning
-                       MODIFY payment_hash VARCHAR(255) NULL,
-                       MODIFY htlc_status VARCHAR(64) NULL,
-                       MODIFY htlc_expiry_time BIGINT NULL",
-                ),
-                Migration::AddColumn {
-                    table: "brz_lnurl_receive_metadata",
-                    column: "invoice",
-                    definition: "TEXT NULL",
-                },
-                Migration::CreateIndex {
-                    name: "brz_idx_lnurl_receive_metadata_invoice",
-                    table: "brz_lnurl_receive_metadata",
-                    columns: "(invoice(255))",
-                },
-                Migration::sql("DELETE FROM brz_settings WHERE `key` = 'lnurl_metadata_updated_after'"),
-            ],
+            // describing one become nullable.
+            vec![Migration::sql(
+                "ALTER TABLE brz_payment_details_lightning
+                   MODIFY payment_hash VARCHAR(255) NULL,
+                   MODIFY htlc_status VARCHAR(64) NULL,
+                   MODIFY htlc_expiry_time BIGINT NULL",
+            )],
         ]
     }
 }
@@ -1529,14 +1513,13 @@ impl Storage for MysqlStorage {
         let mut conn = self.pool.get_conn().await.map_err(map_db_error)?;
         for m in metadata {
             conn.exec_drop(
-                "INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, invoice, nostr_zap_request, nostr_zap_receipt, sender_comment)
-                 VALUES (?, ?, ?, ?, ?, ?)
+                "INSERT INTO brz_lnurl_receive_metadata (user_id, payment_hash, nostr_zap_request, nostr_zap_receipt, sender_comment)
+                 VALUES (?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
-                    invoice = COALESCE(VALUES(invoice), invoice),
                     nostr_zap_request = VALUES(nostr_zap_request),
                     nostr_zap_receipt = VALUES(nostr_zap_receipt),
                     sender_comment = VALUES(sender_comment)",
-                (self.identity.clone(), m.payment_hash, m.invoice, m.nostr_zap_request, m.nostr_zap_receipt, m.sender_comment),
+                (self.identity.clone(), m.payment_hash, m.nostr_zap_request, m.nostr_zap_receipt, m.sender_comment),
             )
             .await
             .map_err(map_db_error)?;
@@ -2112,7 +2095,7 @@ const SELECT_PAYMENT_SQL: &str = "
       LEFT JOIN brz_payment_details_token t ON p.id = t.payment_id AND p.user_id = t.user_id
       LEFT JOIN brz_payment_details_spark s ON p.id = s.payment_id AND p.user_id = s.user_id
       LEFT JOIN brz_payment_metadata pm ON p.id = pm.payment_id AND p.user_id = pm.user_id
-      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.invoice = lrm.invoice AND l.user_id = lrm.user_id";
+      LEFT JOIN brz_lnurl_receive_metadata lrm ON l.payment_hash = lrm.payment_hash AND l.user_id = lrm.user_id";
 
 #[allow(clippy::too_many_lines)]
 fn map_payment(row: &Row) -> Result<Payment, StorageError> {
@@ -2915,7 +2898,6 @@ mod tests {
         // --- lnurl receive metadata ---
         fx.a.set_lnurl_metadata(vec![SetLnurlMetadataItem {
             payment_hash: "shared_payment_hash".to_string(),
-            invoice: Some("lnbc_a".to_string()),
             nostr_zap_request: Some("zap_a".to_string()),
             nostr_zap_receipt: None,
             sender_comment: None,
@@ -2924,7 +2906,6 @@ mod tests {
         .unwrap();
         fx.b.set_lnurl_metadata(vec![SetLnurlMetadataItem {
             payment_hash: "shared_payment_hash".to_string(),
-            invoice: Some("lnbc_b".to_string()),
             nostr_zap_request: Some("zap_b".to_string()),
             nostr_zap_receipt: None,
             sender_comment: None,

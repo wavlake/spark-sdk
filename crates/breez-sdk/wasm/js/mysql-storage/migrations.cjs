@@ -597,9 +597,6 @@ class MysqlMigrationManager {
              MODIFY payment_hash VARCHAR(255) NULL,
              MODIFY htlc_status VARCHAR(64) NULL,
              MODIFY htlc_expiry_time BIGINT NULL`,
-          `ALTER TABLE brz_lnurl_receive_metadata ADD COLUMN invoice TEXT NULL`,
-          `CREATE INDEX brz_idx_lnurl_receive_metadata_invoice ON brz_lnurl_receive_metadata(invoice(255))`,
-          "DELETE FROM brz_settings WHERE `key` = 'lnurl_metadata_updated_after'",
         ],
       },
     ];

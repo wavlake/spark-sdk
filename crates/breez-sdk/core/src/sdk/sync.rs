@@ -151,31 +151,6 @@ impl BreezSdk {
         *lnurl_receive_metadata = db_lnurl_receive_metadata;
     }
 
-    /// Records the Bolt11 behind each Spark invoice the lnurl server advertised
-    /// on our behalf.
-    ///
-    /// The server mints those Bolt11 invoices, so they are not among the receive
-    /// requests the SSP will return for us. Reading them off the metadata it
-    /// syncs is what lets a lightning address payment settled over Spark be
-    /// reported as the Bolt11 it paid.
-    async fn index_lnurl_fallbacks(
-        &self,
-        cache: &ObjectCacheRepository,
-        metadata: &[lnurl_models::ListMetadataMetadata],
-    ) {
-        for bolt11 in metadata.iter().filter_map(|m| m.invoice.as_deref()) {
-            let Ok(Some(fallback)) = self.spark_wallet.extract_spark_fallback(bolt11) else {
-                continue;
-            };
-            if !fallback.is_invoice() {
-                continue;
-            }
-            if let Err(e) = cache.save_bolt11_fallback(&fallback.encoded, bolt11).await {
-                error!("Failed to record an lnurl Bolt11 fallback mapping: {e:?}");
-            }
-        }
-    }
-
     #[allow(clippy::too_many_lines)]
     pub(super) async fn sync_wallet_internal(
         &self,
@@ -348,22 +323,13 @@ impl BreezSdk {
     /// tie back to a Bolt11 from the local mapping alone.
     ///
     /// Where the remote lookups live, so the sync itself stays local: this runs
-    /// over the few payments that need them, once the sources of the link have
-    /// been refreshed. A lightning address payment is the case that needs it:
-    /// the lnurl server minted the Bolt11, so the link reaches us only through
-    /// the metadata it syncs, which can arrive after the payment does.
+    /// over the few payments that need them. It covers the device that did not
+    /// create the invoice, and the one that lost its local mapping.
     ///
     /// Emits for what it resolves even though the status has not moved. The
     /// payment may already have been reported as a plain Spark receive, and a
     /// caller waiting on the invoice has no way to recognise that one.
     async fn retry_bolt11_fallbacks(&self, payments: Vec<Payment>) {
-        if payments.is_empty() {
-            return;
-        }
-        if let Err(e) = self.sync_lnurl_metadata().await {
-            error!("Failed to sync lnurl metadata for fallback resolution: {e:?}");
-            return;
-        }
         for mut payment in payments {
             resolve_bolt11_fallback(
                 &self.spark_wallet,
@@ -656,7 +622,6 @@ impl BreezSdk {
 
             let len = u32::try_from(metadata.metadata.len())?;
             let last_updated_at = metadata.metadata.last().map(|m| m.updated_at);
-            self.index_lnurl_fallbacks(&cache, &metadata.metadata).await;
             self.storage
                 .set_lnurl_metadata(metadata.metadata.into_iter().map(From::from).collect())
                 .await?;

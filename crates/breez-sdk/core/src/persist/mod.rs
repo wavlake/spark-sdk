@@ -92,13 +92,6 @@ pub enum UpdateDepositPayload {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SetLnurlMetadataItem {
     pub payment_hash: String,
-    /// The Bolt11 the metadata belongs to.
-    ///
-    /// What the payment is matched on: a payment settled over the Spark
-    /// destination its invoice advertised has no HTLC, and so no payment hash of
-    /// its own to match against. Absent on rows synced before the server
-    /// reported it.
-    pub invoice: Option<String>,
     pub sender_comment: Option<String>,
     pub nostr_zap_request: Option<String>,
     pub nostr_zap_receipt: Option<String>,
@@ -108,7 +101,6 @@ impl From<lnurl_models::ListMetadataMetadata> for SetLnurlMetadataItem {
     fn from(value: lnurl_models::ListMetadataMetadata) -> Self {
         SetLnurlMetadataItem {
             payment_hash: value.payment_hash,
-            invoice: value.invoice,
             sender_comment: value.sender_comment,
             nostr_zap_request: value.nostr_zap_request,
             nostr_zap_receipt: value.nostr_zap_receipt,

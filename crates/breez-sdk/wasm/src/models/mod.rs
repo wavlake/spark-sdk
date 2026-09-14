@@ -1618,7 +1618,6 @@ pub struct PaymentMetadata {
 #[macros::extern_wasm_bindgen(breez_sdk_spark::SetLnurlMetadataItem)]
 pub struct SetLnurlMetadataItem {
     pub payment_hash: String,
-    pub invoice: Option<String>,
     pub sender_comment: Option<String>,
     pub nostr_zap_request: Option<String>,
     pub nostr_zap_receipt: Option<String>,

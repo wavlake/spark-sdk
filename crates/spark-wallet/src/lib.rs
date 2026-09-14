@@ -17,7 +17,8 @@ pub use spark::{
     header_provider::*,
     operator::rpc::{BalancedConnectionManager, ConnectionManager, DefaultConnectionManager},
     services::{
-        CoopExitFeeQuote, CoopExitSpeedFeeQuote, CpfpChild, CpfpInput, ExitSpeed, Fee,
+        ConfirmedExitNode, CoopExitFeeQuote, CoopExitSpeedFeeQuote, CpfpChild, CpfpInput,
+        ExitChainState, ExitNodeConfirmation, ExitRefund, ExitRefundState, ExitSpeed, Fee,
         FreezeIssuerTokenResponse, InvoiceDescription, LightningReceiveFallback,
         LightningReceivePayment, LightningSendPayment, LightningSendStatus,
         MIN_RELAY_FEE_SAT_PER_VBYTE, Preimage, PreimageRequestStatus, ReceiverTokenOutput,
@@ -69,7 +70,7 @@ pub use spark::{
     },
 };
 pub use unilateral_exit::*;
-pub use wallet::{SendPackagePreparation, SparkWallet};
+pub use wallet::{ExitContext, SendPackagePreparation, SparkWallet};
 pub use wallet_builder::WalletBuilder;
 
 #[cfg(feature = "test-utils")]

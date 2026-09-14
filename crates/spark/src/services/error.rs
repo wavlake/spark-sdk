@@ -46,6 +46,8 @@ pub enum ServiceError {
     InvalidVerifyingKey,
     #[error("not a deposit output")]
     NotADepositOutput,
+    #[error("static deposit quote does not match the requested deposit: {0}")]
+    StaticDepositQuoteMismatch(String),
 
     // Lightning related errors
     #[error("invoice decoding error: {0}")]
@@ -98,8 +100,6 @@ pub enum ServiceError {
     ValidationError(String),
     #[error("insufficient CPFP funding: need at least {required_sat} sats")]
     InsufficientCpfpBudget { required_sat: u64 },
-    #[error("funding UTXO {txid}:{vout} was spent by an unrelated transaction")]
-    FundingUtxoConflict { txid: String, vout: u32 },
     #[error("signer error: {0}")]
     SignerError(#[from] crate::signer::SignerError),
     #[error("service connection error: {0}")]

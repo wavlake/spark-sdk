@@ -449,7 +449,7 @@ pub async fn fund_wallet_via_static_deposit(
     };
 
     let credit_amount_sats = quote.credit_amount_sats;
-    let transfer_id = wallet.claim_static_deposit(quote).await?;
+    let transfer_id = wallet.claim_static_deposit(&tx, quote).await?;
     info!(
         "Claimed static deposit {txid}:{vout} for {credit_amount_sats} sats, \
          transfer {transfer_id}"
@@ -711,7 +711,7 @@ pub async fn submit_package_with_csv_retry(
         })
         .max()
         .unwrap_or(0);
-    bitcoind.generate_blocks(csv_blocks.into()).await?;
+    bitcoind.generate_filler_blocks(csv_blocks.into()).await?;
 
     let retry = bitcoind.submit_package(&[parent, child]).await?;
     let retry_msg = retry

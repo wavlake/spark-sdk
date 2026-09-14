@@ -78,6 +78,10 @@ declare module '@breeztech/breez-sdk-spark-react-native' {
   export const PaymentRequest: any;
   export const CrossChainRouteFilter: any;
   export const CrossChainProvider: any;
+  export const CrossChainFeeMode: any;
+  export type CrossChainFeeMode = any;
+  export const SparkAsset: any;
+  export type SparkAsset = any;
   export type CrossChainRoutePair = any;
   export type CrossChainAddressDetails = any;
 
@@ -89,8 +93,8 @@ declare module '@breeztech/breez-sdk-spark-react-native' {
   export type CpfpInput = any;
   export const ExitLeafSelection: any;
   export type ExitLeafSelection = any;
-  export const ConfirmationStatus: any;
-  export type ConfirmationStatus = any;
+  export const ExitTransactionStatus_Tags: any;
+  export type ExitTransactionStatus = any;
 
   // --- proxy ---
   export type ProxyConfig = any;

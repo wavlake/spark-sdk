@@ -49,14 +49,13 @@ URIs whose recipient address doesn't match the scheme's address family (e.g. a `
 
 ## Providers
 
-The SDK ships with two cross-chain providers. {{#name get_cross_chain_routes}} returns the union of routes offered by each, tagged with {{#name CrossChainRoutePair.provider}}.
+{{#name get_cross_chain_routes}} returns the routes offered by each provider, tagged with {{#name CrossChainRoutePair.provider}}.
 
 | Provider     | Direction        | Spark side       | External side                                                | Mechanism                            |
 | ------------ | ---------------- | ---------------- | ------------------------------------------------------------ | ------------------------------------ |
 | **Orchestra** (Flashnet) | Send + Receive  | BTC sats + USDB | USDC / USDT on Ethereum chains (Arbitrum, Base), Solana, Tron | Spark transfer to a deposit address, then provider bridges to the destination chain |
-| **Boltz**    | Send             | BTC sats only    | USDC / USDT on Ethereum chains (Arbitrum, Base), Solana, Tron                 | Lightning reverse swap: SDK pays a hold invoice, provider claims the on-chain leg |
 
-The provider tag on each {{#name CrossChainRoutePair}} is the source of truth. When the same destination is offered by multiple providers, both routes are returned; the caller picks one based on supported source/destination assets, fees, or other preferences.
+The provider tag on each {{#name CrossChainRoutePair}} is the source of truth. When the same destination is offered by multiple providers, every route is returned; the caller picks one based on supported source/destination assets, fees, or other preferences.
 
 ## Slippage
 
@@ -91,11 +90,12 @@ The Spark-side transfer and the external cross-chain leg have distinct status fi
 | {{#name status}}                                      | The Spark-side transfer (outbound on send; inbound claim on receive)        |
 | {{#name conversion_info.status}}                      | The provider-driven cross-chain leg                                         |
 | {{#name conversion_info.delivered_amount}}            | Final amount delivered to the recipient, set when terminal                  |
+| {{#name conversion_info.external_tx_hash}}            | Transaction on the non-Spark chain: the delivery, or the funding deposit    |
 
 The cross-chain status walks one of:
 
 - **{{#enum ConversionStatus::Pending}}**: deposit/transfer submitted, provider working on the cross-chain leg.
-- **{{#enum ConversionStatus::Completed}}**: provider reports the order terminal-successful; {{#name delivered_amount}} is set.
+- **{{#enum ConversionStatus::Completed}}**: provider reports the order terminal-successful; {{#name delivered_amount}} is set, and {{#name external_tx_hash}} identifies the transaction on the non-Spark chain: the delivery on a send, the funding deposit on a receive. Boltz-provider conversions leave the hash unset.
 - **{{#enum ConversionStatus::RefundNeeded}}**: the cross-chain leg was rejected after deposit (typically because the realized rate exceeded {{#name max_slippage_bps}}); the deposit is awaiting refund. *(send only)*
 - **{{#enum ConversionStatus::Refunded}}**: the funds have been refunded back to the wallet.
 - **{{#enum ConversionStatus::Failed}}**: terminal failure with no refund pending.
@@ -114,7 +114,7 @@ Calling {{#name send_payment}} is safe to retry on transient errors **only when 
 
 #### Sends with no token leg
 
-When the first leg is a Spark sats transfer (Orchestra with BTC source, or Boltz funded directly from the sats balance), the SDK threads a deterministic transfer id through to the underlying Spark transfer. Retrying with the same {{#name PrepareSendPaymentResponse}} produces the same transfer id, and the Spark protocol returns the original transfer instead of firing a new one — no double-deposit.
+When the first leg is a Spark sats transfer (Orchestra with a BTC source), the SDK threads a deterministic transfer id through to the underlying Spark transfer. Retrying with the same {{#name PrepareSendPaymentResponse}} produces the same transfer id, and the Spark protocol returns the original transfer instead of firing a new one — no double-deposit.
 
 Two ways to drive idempotency:
 
@@ -128,7 +128,7 @@ When the first leg is a token transfer at the Spark protocol layer, there is no 
 This arises in two ways for a cross-chain send:
 
 - **Direct token send** — USDB source on Orchestra. The first leg is a USDB transfer to the provider deposit address.
-- **Token conversion** — USDB balance routed through a sats-only provider (e.g. Boltz). The SDK auto-converts USDB → BTC via the [stable-balance](./stable_balance.md) flow before the provider leg; that conversion is itself a token transfer.
+- **Token conversion** — USDB balance routed over a route whose Spark side takes only sats. The SDK auto-converts USDB → BTC via the [stable-balance](./stable_balance.md) flow before the provider leg; that conversion is itself a token transfer.
 
 This matches the existing contract for direct token sends.
 

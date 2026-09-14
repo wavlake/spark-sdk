@@ -10,7 +10,7 @@ import {
   CpfpFundingKind,
   CpfpInput,
   ExitLeafSelection,
-  ConfirmationStatus,
+  ExitTransactionStatus_Tags,
 } from '@breeztech/breez-sdk-spark-react-native'
 import type {
   BreezSdkInterface,
@@ -194,7 +194,8 @@ async function handleUnilateralExit(sdk: BreezSdkInterface, args: string[]): Pro
 
   lines.push(
     `Recoverable ${response.recoverableValueSat} sats, ` +
-    `total fee ${response.totalFeeSat} sats, ` +
+    `total fee ${response.totalFeeSat} sats ` +
+    `(cpfp ${response.cpfpFeeSat}, fanout ${response.fanoutFeeSat}, sweep ${response.sweepFeeSat}), ` +
     `${response.transactions.length} transaction(s):`
   )
 
@@ -208,9 +209,25 @@ async function handleUnilateralExit(sdk: BreezSdkInterface, args: string[]): Pro
       : ''
     lines.push(`  [${i}] ${tx.kind} status=${tx.status} txid=${tx.txid}${after}${csv}`)
 
-    if (tx.status === ConfirmationStatus.Confirmed) {
-      lines.push('      (already confirmed, nothing to broadcast)')
+    if (tx.status.tag === ExitTransactionStatus_Tags.Confirmed) {
+      const blockHeight = tx.status.inner?.blockHeight
+      if (blockHeight != null) {
+        lines.push(`      (confirmed in block ${blockHeight}, nothing to broadcast)`)
+      } else {
+        lines.push('      (already confirmed, nothing to broadcast)')
+      }
       continue
+    }
+    if (tx.status.tag === ExitTransactionStatus_Tags.WaitingForDependencies) {
+      lines.push('      (waiting on the transactions it depends on)')
+    }
+    if (tx.status.tag === ExitTransactionStatus_Tags.WaitingForTimelock) {
+      const spendableAtHeight = tx.status.inner?.spendableAtHeight
+      if (spendableAtHeight != null) {
+        lines.push(`      (waiting for its timelock, until block ${spendableAtHeight})`)
+      } else {
+        lines.push('      (waiting for its timelock)')
+      }
     }
 
     const pkg = tx.cpfpTxHex

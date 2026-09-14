@@ -53,8 +53,7 @@ pub(crate) enum FallbackLookup {
 /// settles it with a transfer, so nothing reaches the SSP and the payment
 /// arrives carrying only the Spark invoice it fulfilled. Recovering the Bolt11
 /// behind that invoice is what lets a receiver waiting on the invoice see it
-/// paid, and it re-attaches the metadata keyed on the invoice and its payment
-/// hash.
+/// paid, and it re-attaches the payment metadata keyed on that invoice.
 ///
 /// Leaves the payment untouched when the Bolt11 cannot be recovered: it is
 /// still a correct Spark receive for the right amount, just not tied to the

@@ -688,8 +688,8 @@ where
         let wallet = state.invoice_wallet(&domain).await;
         let amount_sats = amount_msat / 1000;
         // Unsigned, because only the user holds the key for their own identity.
-        // The invoice is authenticated by the Bolt11 that carries it, which the
-        // user's SDK checks against what it asked the SSP for.
+        // What makes it trustworthy is the Bolt11 that carries it: this server
+        // checks the SSP embedded the invoice it was asked to.
         let fallback = if state.include_spark_fallback {
             let expiry_time = params.expiry.and_then(|secs| {
                 SystemTime::now().checked_add(Duration::from_secs(u64::from(secs)))

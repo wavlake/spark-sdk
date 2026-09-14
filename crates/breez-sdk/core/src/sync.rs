@@ -40,8 +40,8 @@ impl SparkSyncService {
 
     /// Returns the payments that settled a Spark invoice this pass could not tie
     /// back to the Bolt11 it was embedded in from the local mapping alone, for
-    /// the caller to retry once it has refreshed the sources of that link. The
-    /// remote lookups are left to that pass so this one stays local.
+    /// the caller to retry. The remote lookups are left to that pass so this one
+    /// stays local.
     pub async fn sync_payments(
         &self,
         initial_sync_complete: bool,

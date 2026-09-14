@@ -392,11 +392,7 @@ pub(super) async fn receive_bolt11_invoice_inner(
         )
         .await?;
 
-    // Only worth recording for invoices we can be paid on: an invoice minted for
-    // another identity settles into their wallet, not ours.
-    if matches!(fallback, LightningReceiveFallback::Invoice(_))
-        && receiver_identity_public_key.is_none()
-    {
+    if matches!(fallback, LightningReceiveFallback::Invoice(_)) {
         // Keyed on the destination as the Bolt11 carries it, not as we asked for
         // it: that is what a payer echoes back on the transfer, and validation
         // accepts an SSP that re-encodes an otherwise identical invoice.
@@ -424,8 +420,9 @@ pub(super) async fn receive_bolt11_invoice_inner(
 /// Mints the Spark invoice to embed, mirroring the BOLT11 so a payer settling
 /// over Spark pays the same amount for the same thing.
 ///
-/// An invoice for another identity is left unsigned, since only its holder can
-/// sign for it.
+/// Nothing is embedded in an invoice minted for another identity: only its
+/// holder can sign for it, and a transfer paying it settles into their wallet,
+/// where this one cannot tie it back to the BOLT11.
 async fn build_fallback(
     sdk: &BreezSdk,
     amount_sats: Option<u64>,
@@ -433,32 +430,21 @@ async fn build_fallback(
     description: &str,
     receiver_identity_public_key: Option<PublicKey>,
 ) -> Result<LightningReceiveFallback, SdkError> {
-    if !sdk.config.prefer_spark_over_lightning {
+    if !sdk.config.prefer_spark_over_lightning || receiver_identity_public_key.is_some() {
         return Ok(LightningReceiveFallback::None);
     }
 
     let expiry_time = expiry_secs
         .and_then(|secs| SystemTime::now().checked_add(Duration::from_secs(u64::from(secs))));
-    let description = Some(description.to_string());
-
-    let invoice = match receiver_identity_public_key {
-        Some(receiver) => sdk.spark_wallet.create_unsigned_spark_invoice(
-            receiver,
-            amount_sats,
+    let invoice = sdk
+        .spark_wallet
+        .create_spark_invoice(
+            amount_sats.map(u128::from),
+            None,
             expiry_time,
-            description,
-        )?,
-        None => {
-            sdk.spark_wallet
-                .create_spark_invoice(
-                    amount_sats.map(u128::from),
-                    None,
-                    expiry_time,
-                    description,
-                    None,
-                )
-                .await?
-        }
-    };
+            Some(description.to_string()),
+            None,
+        )
+        .await?;
     Ok(LightningReceiveFallback::Invoice(invoice))
 }

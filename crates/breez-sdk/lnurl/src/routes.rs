@@ -25,7 +25,7 @@ use spark::utils::verify_signature::verify_signature_ecdsa;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
@@ -686,27 +686,14 @@ where
 
         let pubkey = parse_pubkey(&user.pubkey)?;
         let wallet = state.invoice_wallet(&domain).await;
-        let amount_sats = amount_msat / 1000;
-        // Unsigned, because only the user holds the key for their own identity.
-        // What makes it trustworthy is the Bolt11 that carries it: this server
-        // checks the SSP embedded the invoice it was asked to.
-        let fallback = if state.include_spark_fallback {
-            let expiry_time = params.expiry.and_then(|secs| {
-                SystemTime::now().checked_add(Duration::from_secs(u64::from(secs)))
-            });
-            let invoice = wallet
-                .create_unsigned_spark_invoice(pubkey, Some(amount_sats), expiry_time, None)
-                .map_err(|e| {
-                    error!("failed to create spark invoice: {}", e);
-                    lnurl_error("failed to create invoice")
-                })?;
-            spark_wallet::LightningReceiveFallback::Invoice(invoice)
+        let fallback = if state.include_spark_address {
+            spark_wallet::LightningReceiveFallback::Address
         } else {
             spark_wallet::LightningReceiveFallback::None
         };
         let res = wallet
             .create_lightning_invoice(
-                amount_sats,
+                amount_msat / 1000,
                 Some(spark_wallet::InvoiceDescription::DescriptionHash(
                     desc_hash.to_byte_array(),
                 )),

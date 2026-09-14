@@ -119,7 +119,7 @@ struct Args {
     /// cost of privacy.
     #[cfg(feature = "dev")]
     #[arg(long, default_value = "false")]
-    pub dev_dont_use_lnurl_include_spark_fallback: bool,
+    pub dev_dont_use_lnurl_include_spark_address: bool,
 
     /// List of domains that are allowed to use the lnurl server. Comma separated.
     /// These are in addition to any domains stored in the database. The configured
@@ -483,10 +483,10 @@ where
         min_sendable: args.min_sendable,
         max_sendable: args.max_sendable,
         registration_limit,
-        include_spark_fallback: {
+        include_spark_address: {
             #[cfg(feature = "dev")]
             {
-                args.dev_dont_use_lnurl_include_spark_fallback
+                args.dev_dont_use_lnurl_include_spark_address
             }
             #[cfg(not(feature = "dev"))]
             {

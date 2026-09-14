@@ -1292,33 +1292,6 @@ impl SparkWallet {
         ))
     }
 
-    /// Mints an unsigned sats invoice payable to `receiver`.
-    ///
-    /// For callers that must produce an invoice for an identity they hold no key
-    /// for, such as an LNURL server issuing invoices on behalf of its users.
-    /// See [`SparkAddress::to_unsigned_invoice_string`] for what being unsigned
-    /// means for a payer.
-    pub fn create_unsigned_spark_invoice(
-        &self,
-        receiver: PublicKey,
-        amount_sats: Option<u64>,
-        expiry_time: Option<SystemTime>,
-        description: Option<String>,
-    ) -> Result<String, SparkWalletError> {
-        let invoice_fields = SparkInvoiceFields {
-            id: uuid::Uuid::now_v7(),
-            version: 1,
-            memo: description,
-            sender_public_key: None,
-            expiry_time,
-            payment_type: Some(SparkAddressPaymentType::SatsPayment(SatsPayment {
-                amount: amount_sats,
-            })),
-        };
-        let invoice = SparkAddress::new(receiver, self.config.network, Some(invoice_fields));
-        Ok(invoice.to_unsigned_invoice_string()?)
-    }
-
     pub async fn create_spark_invoice(
         &self,
         amount: Option<u128>,

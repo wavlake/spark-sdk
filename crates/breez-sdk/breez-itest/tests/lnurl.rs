@@ -488,13 +488,12 @@ async fn test_05_lnurl_payment_flow(#[future] alice_sdk: Result<SdkInstance>) ->
     Ok(())
 }
 
-/// Fixture: Lnurl service that advertises a Spark destination on the invoices
-/// it mints.
+/// Fixture: Lnurl service with include_spark_address enabled
 #[fixture]
-async fn lnurl_spark_fallback_fixture() -> LnurlFixture {
-    LnurlFixture::with_config(LnurlImageConfig::default().with_include_spark_fallback(true))
+async fn lnurl_spark_address_fixture() -> LnurlFixture {
+    LnurlFixture::with_config(LnurlImageConfig::default().with_include_spark_address(true))
         .await
-        .expect("Failed to start Lnurl service with a Spark fallback")
+        .expect("Failed to start Lnurl service with Spark address")
 }
 
 /// Test LNURL full balance payment - sends entire balance via LNURL
@@ -1071,14 +1070,14 @@ async fn test_09_invoice_expiry_parameter() -> Result<()> {
 /// error despite the funds being transferred successfully.
 #[rstest]
 #[test_log::test(tokio::test)]
-async fn test_11_lnurl_spark_fallback_payment(
-    #[future] lnurl_spark_fallback_fixture: LnurlFixture,
+async fn test_11_lnurl_spark_address_payment(
+    #[future] lnurl_spark_address_fixture: LnurlFixture,
     #[future] alice_sdk: Result<SdkInstance>,
 ) -> Result<()> {
-    info!("=== Starting test_11_lnurl_spark_fallback_payment ===");
+    info!("=== Starting test_11_lnurl_spark_address_payment ===");
 
     // Setup Bob with the Spark address LNURL server
-    let lnurl = Arc::new(lnurl_spark_fallback_fixture.await);
+    let lnurl = Arc::new(lnurl_spark_address_fixture.await);
     let lnurl_domain = lnurl.http_url().to_string();
 
     let mut bob = async {
@@ -1207,7 +1206,7 @@ async fn test_11_lnurl_spark_fallback_payment(
     // nothing ties the transfer back to it. Attribution covers invoices a wallet
     // mints itself, which `bolt11_spark_fallback` covers.
 
-    info!("=== Test test_11_lnurl_spark_fallback_payment PASSED ===");
+    info!("=== Test test_11_lnurl_spark_address_payment PASSED ===");
     Ok(())
 }
 

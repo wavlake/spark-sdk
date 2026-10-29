@@ -83,6 +83,9 @@ impl LnurlFixture {
             "BREEZ_LNURL_MAX_SENDABLE=1000000000",
             "-e",
             "BREEZ_LNURL_DEV_DONT_USE_LNURL_INCLUDE_SPARK_ADDRESS=false",
+            // The CLI calls the server directly, with no proxy to hold a secret.
+            "-e",
+            "BREEZ_LNURL_DEV_NO_FORWARD_SECRET=true",
             IMAGE,
         ])
         .await?

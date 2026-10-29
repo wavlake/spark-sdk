@@ -31,13 +31,14 @@ use std::str::FromStr;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{Mutex, watch};
 use tower_http::cors::{Any, CorsLayer};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use x509_parser::prelude::{FromDer, X509Certificate};
 
 mod auth;
 mod domains;
 mod error;
+mod forward_secret;
 mod invoice_paid;
 mod partner_jwt;
 mod postgresql;
@@ -145,6 +146,18 @@ struct Args {
     /// for audit/debugging before they are cleaned up periodically.
     #[arg(long, default_value = "90")]
     pub webhook_delivery_ttl_days: u32,
+
+    /// WAVLAKE PATCH: the secret the address-domain proxy sends in
+    /// `X-Wavlake-Forward-Secret`, at least 32 characters. Required: see
+    /// `forward_secret.rs`.
+    #[arg(long)]
+    pub forward_secret: Option<String>,
+
+    /// WAVLAKE PATCH: run with no forward secret, trusting every caller's
+    /// `X-Forwarded-Host` and leaving the control plane open. Tests only.
+    #[cfg(feature = "dev")]
+    #[arg(long, default_value = "false")]
+    pub dev_no_forward_secret: bool,
 }
 
 /// Fetches the comma-separated certificate revocation list at `url`.
@@ -290,6 +303,22 @@ where
     DB: LnurlRepository + webhooks::WebhookRepository + Clone + Send + Sync + 'static,
 {
     let auth_seed = parse_auth_seed(args.ssp_auth_seed.as_deref())?;
+    // WAVLAKE PATCH: refuses to start without a forward secret.
+    let forward_gate = forward_secret::ForwardGate::from_config(args.forward_secret.as_deref(), {
+        #[cfg(feature = "dev")]
+        {
+            args.dev_no_forward_secret
+        }
+        #[cfg(not(feature = "dev"))]
+        {
+            false
+        }
+    })?;
+    if matches!(forward_gate, forward_secret::ForwardGate::Open) {
+        warn!(
+            "no forward secret: X-Forwarded-Host is trusted from any caller and the control plane is open"
+        );
+    }
 
     let mut spark_config = SparkWalletConfig::default_config(args.network);
     spark_config.service_provider_config.schema_endpoint = Some("graphql/spark/rc".to_string());
@@ -513,6 +542,8 @@ where
             state.clone(),
             auth::auth::<DB>,
         ))
+        // WAVLAKE PATCH: the control plane answers only the trusted proxy.
+        .route_layer(middleware::from_fn(forward_secret::require_trusted))
         .route(
             "/.well-known/lnurlp/{identifier}",
             get(LnurlServer::<DB>::handle_lnurl_pay),
@@ -529,6 +560,11 @@ where
         .route("/webhook", post(LnurlServer::<DB>::webhook))
         .route("/health", get(|| async { StatusCode::OK }))
         .layer(Extension(state))
+        // WAVLAKE PATCH: decides per request whether it came from the trusted proxy.
+        .layer(middleware::from_fn_with_state(
+            forward_gate,
+            forward_secret::mark_trust,
+        ))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

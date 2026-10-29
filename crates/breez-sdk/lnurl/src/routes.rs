@@ -1973,14 +1973,11 @@ pub struct Host(pub String);
 /// origin (a proxy cannot send a bare `Host` for a domain the Google frontend
 /// does not route), and the address domain rides `X-Forwarded-Host` instead.
 ///
-/// Honouring the header first is safe under the v2 signed messages: every
-/// control-plane signature commits to the domain the wallet addressed, so a
-/// forged `X-Forwarded-Host` only makes the signature fail to verify — it
-/// cannot steer a registration to another served domain. The unsigned reads
-/// (`/lnurlp/{name}`, `/lnurlpay/available/{name}`) are public data keyed on
-/// an allow-listed domain either way. The `Host`-only fallback below is
-/// upstream's code, untouched.
-const FORWARDED_HOST_HEADER: &str = "x-forwarded-host";
+/// The header reaches this extractor only from the trusted proxy:
+/// `forward_secret` removes it from every other request, since a signature
+/// commits to the domain but cannot show that the proxy's name check ran. The
+/// `Host`-only fallback below is upstream's code, untouched.
+pub(crate) const FORWARDED_HOST_HEADER: &str = "x-forwarded-host";
 
 /// The first non-empty entry of a comma-separated forwarded-host value, or
 /// `None` when the header is absent or carries nothing usable.
@@ -3997,7 +3994,7 @@ mod forwarded_host_tests {
         let request = build(Request::builder().uri("https://origin.run.app/lnurlp/alice"))
             .body(())
             .expect("request");
-        let (mut parts, _) = request.into_parts();
+        let (mut parts, ()) = request.into_parts();
         let Host(host) = Host::from_request_parts(&mut parts, &())
             .await
             .expect("host resolves");

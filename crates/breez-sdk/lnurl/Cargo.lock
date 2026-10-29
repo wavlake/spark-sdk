@@ -2122,6 +2122,7 @@ dependencies = [
  "spark",
  "spark-wallet",
  "sqlx",
+ "subtle",
  "thiserror 2.0.16",
  "tokio",
  "tonic",

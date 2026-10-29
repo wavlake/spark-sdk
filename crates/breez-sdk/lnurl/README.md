@@ -68,6 +68,7 @@ docker run -p 8080:8080 \
   -e BREEZ_LNURL_DB_URL="postgres://user:password@postgres_host:5432/lnurl_db" \
   -e BREEZ_LNURL_DOMAINS="yourdomain.com" \
   -e BREEZ_LNURL_DEFAULT_API_KEY="<breez-api-key>" \
+  -e BREEZ_LNURL_FORWARD_SECRET="<shared-with-your-proxy>" \
   -e BREEZ_LNURL_AUTO_MIGRATE=true \
   lnurl-server
 ```
@@ -77,7 +78,7 @@ docker run -p 8080:8080 \
 If you've built the binary, you can run it directly:
 
 ```shell
-./target/release/lnurl --db-url="postgres://user:password@localhost:5432/lnurl_db" --domains="yourdomain.com" --default-api-key="<breez-api-key>" --auto-migrate
+./target/release/lnurl --db-url="postgres://user:password@localhost:5432/lnurl_db" --domains="yourdomain.com" --default-api-key="<breez-api-key>" --forward-secret="<shared-with-your-proxy>" --auto-migrate
 ```
 
 ## Configuration
@@ -114,6 +115,7 @@ max_registrations_per_day = 5       # Address registrations per pubkey per domai
                                     # in a rolling 24h window (0 disables)
 domains = "yourdomain.com"          # Comma-separated list of allowed domains
 default_api_key = "<breez-api-key>" # Fallback Breez API key for partner attribution (required on mainnet)
+forward_secret = "<shared-with-your-proxy>" # Required; see "Forward secret" below
 ```
 
 ### Important Configuration Options
@@ -132,6 +134,7 @@ default_api_key = "<breez-api-key>" # Fallback Breez API key for partner attribu
 | `--max-registrations-per-day` | Address registrations one pubkey may perform per domain in a rolling 24h window, refused with `429` past it (`0` disables) | `5` |
 | `--webhook-domain` | Domain for the webhook URL registered with the SSP | (none) |
 | `--ssp-auth-seed` | Hex-encoded 32-byte seed for SSP authentication | (random) |
+| `--forward-secret` | Secret the address-domain proxy sends in `X-Wavlake-Forward-Secret`, at least 32 characters (**required**, see "Forward secret") | (none) |
 
 The allowed domains are the ones stored in the database, which the server refreshes
 periodically and to which `--domains` is added on startup. If that list ends up empty
@@ -151,6 +154,20 @@ This server creates invoices on behalf of its users, so each lightning-address r
 A receive is attributed to the domain's own Breez API key when one is configured for that domain, otherwise to the **default API key** (`--default-api-key` / `BREEZ_LNURL_DEFAULT_API_KEY`).
 
 On **mainnet the default API key is required**, and the server will not start without it. This ensures a self-hosted server attributes all of its receives (to its own partner) instead of leaving any unattributed.
+
+### Forward secret (Wavlake patch)
+
+This fork is served behind a proxy that owns the address domain: the proxy decides who may
+hold a name, then forwards to this server with the domain in `X-Forwarded-Host`. The server
+honours that header, and answers the authenticated endpoints below, only for a request
+carrying the forward secret in `X-Wavlake-Forward-Secret`. Any other request has
+`X-Forwarded-Host` removed (it resolves on its own `Host`, as upstream does) and gets `401`
+from the authenticated endpoints. The public endpoints still answer everyone.
+
+The server will not start without a secret. Generate one with `openssl rand -hex 32` and give
+the same value to the proxy. Builds with the `dev` feature (tests only) can run without one
+with `--dev-no-forward-secret` (`BREEZ_LNURL_DEV_NO_FORWARD_SECRET=true`); release images are
+built without that feature.
 
 ### Database Support
 

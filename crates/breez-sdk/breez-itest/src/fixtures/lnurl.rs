@@ -143,6 +143,8 @@ impl LnurlFixture {
                 "BREEZ_LNURL_DEV_DONT_USE_LNURL_INCLUDE_SPARK_ADDRESS",
                 config.include_spark_address.to_string(),
             )
+            // The SDK calls the server directly, with no proxy to hold a secret.
+            .with_env_var("BREEZ_LNURL_DEV_NO_FORWARD_SECRET", "true")
             // Allow the container to reach services on the host via host.docker.internal
             .with_host("host.docker.internal", Host::HostGateway);
 
